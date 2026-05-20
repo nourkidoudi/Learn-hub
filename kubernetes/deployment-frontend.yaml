@@ -1,0 +1,156 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: learning-frontend
+  namespace: default
+  labels:
+    app: learning-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: learning-frontend
+  template:
+    metadata:
+      labels:
+        app: learning-frontend
+    spec:
+      containers:
+        - name: learning-frontend
+          image: nourki2003/learnhub-learning-frontend:latest
+          env:
+            - name: VITE_API_URL
+              value: "/api"
+          ports:
+            - containerPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: learning-frontend
+  namespace: default
+spec:
+  ports:
+    - port: 80
+      targetPort: 80
+  selector:
+    app: learning-frontend
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-gateway
+  namespace: default
+  labels:
+    app: nginx-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-gateway
+  template:
+    metadata:
+      labels:
+        app: nginx-gateway
+    spec:
+      containers:
+        - name: nginx-gateway
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: nginx-gateway-config
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-gateway-config
+  namespace: default
+data:
+  nginx.conf: |
+    events {
+        worker_connections 1024;
+    }
+
+    http {
+        include       /etc/nginx/mime.types;
+        default_type  application/octet-stream;
+
+        sendfile        on;
+        keepalive_timeout  65;
+
+        server {
+            listen 80;
+            server_name localhost;
+
+            # Serve Frontend
+            location / {
+                proxy_pass http://learning-frontend:80/;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+            }
+
+            # Route to User Service
+            location /api/auth/ {
+                proxy_pass http://user-service:3001/auth/;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+            }
+            location /api/users/ {
+                proxy_pass http://user-service:3001/users/;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+            }
+
+            # Route to Course Service
+            location /api/courses/ {
+                proxy_pass http://course-service:8000/courses/;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+            }
+            location /api/lessons/ {
+                proxy_pass http://course-service:8000/lessons/;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+            }
+
+            # Route to Analytics Service
+            location /api/analytics/ {
+                proxy_pass http://analytics-service:8001/;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+            }
+
+            # Route to AI Tutor Service
+            location /api/tutor/ {
+                proxy_pass http://ai-tutor-service:8002/;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header Connection '';
+                proxy_http_version 1.1;
+                chunked_transfer_encoding off;
+                proxy_buffering off;
+                proxy_cache off;
+            }
+        }
+    }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-gateway
+  namespace: default
+spec:
+  type: NodePort
+  ports:
+    - port: 80
+      targetPort: 80
+      nodePort: 30080
+  selector:
+    app: nginx-gateway

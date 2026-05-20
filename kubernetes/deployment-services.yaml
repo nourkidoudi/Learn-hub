@@ -1,0 +1,250 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: default
+  labels:
+    app: user-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: user-service
+  template:
+    metadata:
+      labels:
+        app: user-service
+    spec:
+      containers:
+        - name: user-service
+          image: nourki2003/learnhub-user-service:latest
+          env:
+            - name: MONGO_URI
+              value: "mongodb://mongodb:27017/users"
+            - name: JWT_SECRET
+              value: "supersecret"
+            - name: PORT
+              value: "3001"
+          ports:
+            - containerPort: 3001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: default
+spec:
+  ports:
+    - port: 3001
+  selector:
+    app: user-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: course-service
+  namespace: default
+  labels:
+    app: course-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: course-service
+  template:
+    metadata:
+      labels:
+        app: course-service
+    spec:
+      containers:
+        - name: course-service
+          image: nourki2003/learnhub-course-service:latest
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://postgres:postgres@postgres:5432/courses"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: JWT_SECRET
+              value: "supersecret"
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: course-service
+  namespace: default
+spec:
+  ports:
+    - port: 8000
+  selector:
+    app: course-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service
+  namespace: default
+  labels:
+    app: analytics-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: analytics-service
+  template:
+    metadata:
+      labels:
+        app: analytics-service
+    spec:
+      containers:
+        - name: analytics-service
+          image: nourki2003/learnhub-analytics-service:latest
+          env:
+            - name: DATABASE_URL
+              value: "postgresql://postgres:postgres@postgres:5432/courses"
+          ports:
+            - containerPort: 8001
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+  namespace: default
+spec:
+  ports:
+    - port: 8001
+  selector:
+    app: analytics-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-tutor-service
+  namespace: default
+  labels:
+    app: ai-tutor-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-tutor-service
+  template:
+    metadata:
+      labels:
+        app: ai-tutor-service
+    spec:
+      containers:
+        - name: ai-tutor-service
+          image: nourki2003/learnhub-ai-tutor-service:latest
+          env:
+            - name: OLLAMA_URL
+              value: "http://ollama:11434"
+            - name: OLLAMA_MODEL
+              value: "tinyllama"
+          ports:
+            - containerPort: 8002
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-tutor-service
+  namespace: default
+spec:
+  ports:
+    - port: 8002
+  selector:
+    app: ai-tutor-service
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ollama
+  namespace: default
+  labels:
+    app: ollama
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ollama
+  template:
+    metadata:
+      labels:
+        app: ollama
+    spec:
+      containers:
+        - name: ollama
+          image: ollama/ollama:latest
+          ports:
+            - containerPort: 11434
+          volumeMounts:
+            - name: ollama-storage
+              mountPath: /root/.ollama
+      volumes:
+        - name: ollama-storage
+          persistentVolumeClaim:
+            claimName: ollama-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ollama
+  namespace: default
+spec:
+  ports:
+    - port: 11434
+  selector:
+    app: ollama
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: n8n-automation
+  namespace: default
+  labels:
+    app: n8n-automation
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: n8n-automation
+  template:
+    metadata:
+      labels:
+        app: n8n-automation
+    spec:
+      containers:
+        - name: n8n-automation
+          image: n8nio/n8n:latest
+          env:
+            - name: N8N_HOST
+              value: "0.0.0.0"
+            - name: N8N_PORT
+              value: "5678"
+            - name: N8N_PROTOCOL
+              value: "http"
+            - name: NODE_ENV
+              value: "production"
+            - name: WEBHOOK_URL
+              value: "http://localhost:5678/"
+          ports:
+            - containerPort: 5678
+          volumeMounts:
+            - name: n8n-storage
+              mountPath: /home/node/.n8n
+      volumes:
+        - name: n8n-storage
+          persistentVolumeClaim:
+            claimName: n8n-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: n8n-automation
+  namespace: default
+spec:
+  ports:
+    - port: 5678
+  selector:
+    app: n8n-automation

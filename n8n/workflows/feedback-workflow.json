@@ -1,0 +1,114 @@
+{
+  "name": "Course Feedback Analysis",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "course-feedback",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Webhook (Receive Feedback)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "webhookId": "feedback-webhook"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://ollama:11434/api/generate",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "model",
+              "value": "llama3"
+            },
+            {
+              "name": "prompt",
+              "value": "=Analyse ce feedback d'un étudiant. Donne-moi le sentiment (Positif/Négatif/Neutre) et un résumé d'une seule phrase : \"{{ $json.body.comment }}\""
+            },
+            {
+              "name": "stream",
+              "value": "false"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ai-node",
+      "name": "Ollama (AI Enrichment)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "=INSERT INTO analytics_events (user_id, event_type, entity_id, timestamp) VALUES ('{{ $('Webhook (Receive Feedback)').item.json.body.user_id }}', 'feedback_submitted', '{{ $('Webhook (Receive Feedback)').item.json.body.course_id }}', NOW());"
+      },
+      "id": "db-node",
+      "name": "Postgres (Store Analytics)",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.2,
+      "position": [680, 300],
+      "credentials": {
+        "postgres": {
+          "id": "postgres-cred",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "text": "=🔔 Nouvel avis sur un cours !\n\nUtilisateur: {{ $('Webhook (Receive Feedback)').item.json.body.user_id }}\nCours: {{ $('Webhook (Receive Feedback)').item.json.body.course_id }}\n\n🧠 Analyse IA:\n{{ $json.response }}"
+      },
+      "id": "notify-node",
+      "name": "Notification (Discord/Slack)",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 2,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Webhook (Receive Feedback)": {
+      "main": [
+        [
+          {
+            "node": "Ollama (AI Enrichment)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama (AI Enrichment)": {
+      "main": [
+        [
+          {
+            "node": "Postgres (Store Analytics)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres (Store Analytics)": {
+      "main": [
+        [
+          {
+            "node": "Notification (Discord/Slack)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
